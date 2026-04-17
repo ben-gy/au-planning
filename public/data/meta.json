@@ -1,0 +1,11 @@
+{
+  "lastUpdated": "2026-04-17T07:34:03.271Z",
+  "councils": [
+    {
+      "name": "City of Casey",
+      "slug": "casey",
+      "state": "VIC",
+      "recordCount": 5000
+    }
+  ]
+}
