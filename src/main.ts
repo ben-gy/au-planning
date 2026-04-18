@@ -1,6 +1,6 @@
 import { injectStyles } from './styles';
-import { loadApplications, loadAggregates, loadMeta, filterApplications, defaultFilters, type FilterState } from './data';
-import type { DevelopmentApplication, Aggregates, Meta, ViewId } from './types';
+import { loadApplications, loadAggregates, loadMeta, loadCouncilStats, filterApplications, defaultFilters, type FilterState } from './data';
+import type { DevelopmentApplication, Aggregates, Meta, CouncilStats, ViewId } from './types';
 import { formatNumber, debounce, sortedEntries, allCategoryColors } from './utils';
 import { getAllTerms } from './glossary';
 import { initGlossaryLinks } from './tooltip';
@@ -11,12 +11,17 @@ import { renderFlowView } from './views/flow';
 import { renderSuburbsView } from './views/suburbs';
 import { renderProcessingView } from './views/processing';
 import { renderMapView, destroyMap } from './views/map';
+import { renderLeaderboard } from './views/leaderboard';
+import { renderInsightsView } from './views/insights';
+import { renderStatesView } from './views/states';
+import { openCouncilPanel } from './views/council-detail';
 
 // State
 let apps: DevelopmentApplication[] = [];
 let aggregates: Aggregates | null = null;
 let meta: Meta | null = null;
-let currentView: ViewId = 'map';
+let councilStats: CouncilStats[] = [];
+let currentView: ViewId = 'leaderboard';
 let filters: FilterState = defaultFilters();
 
 // Restore view from localStorage
@@ -32,17 +37,24 @@ async function init(): Promise<void> {
   if (viewContainer) viewContainer.innerHTML = '<div class="loading"><span class="loading-pulse">Loading development applications…</span></div>';
 
   try {
-    [apps, aggregates, meta] = await Promise.all([
+    [apps, aggregates, meta, councilStats] = await Promise.all([
       loadApplications(),
       loadAggregates(),
       loadMeta(),
+      loadCouncilStats(),
     ]);
 
     updateStats();
     populateFilters();
     renderCurrentView();
+
+    // Check for council hash on load
+    const hash = window.location.hash;
+    if (hash.startsWith('#council=')) {
+      const slug = hash.replace('#council=', '');
+      handleCouncilClick(slug);
+    }
   } catch (err) {
-    const viewContainer = document.getElementById('view-container');
     if (viewContainer) {
       viewContainer.innerHTML = `
         <div class="error-msg">
@@ -59,6 +71,8 @@ function renderShell(): void {
   if (!app) return;
 
   const views: { id: ViewId; label: string }[] = [
+    { id: 'leaderboard', label: 'Leaderboard' },
+    { id: 'insights', label: 'Insights' },
     { id: 'map', label: 'Map' },
     { id: 'table', label: 'Table' },
     { id: 'categories', label: 'Categories' },
@@ -66,6 +80,7 @@ function renderShell(): void {
     { id: 'flow', label: 'Flow' },
     { id: 'suburbs', label: 'Suburbs' },
     { id: 'processing', label: 'Processing' },
+    { id: 'states', label: 'States' },
   ];
 
   app.innerHTML = `
@@ -88,6 +103,7 @@ function renderShell(): void {
     </nav>
     <div class="filter-bar" id="filter-bar">
       <span class="filter-label">Filter:</span>
+      <select class="filter-select" id="filter-council" style="display:none;"><option value="">All councils</option></select>
       <select class="filter-select" id="filter-category"><option value="">All categories</option></select>
       <select class="filter-select" id="filter-decision"><option value="">All decisions</option></select>
       <select class="filter-select" id="filter-suburb"><option value="">All suburbs</option></select>
@@ -98,7 +114,7 @@ function renderShell(): void {
       <div class="view-container" id="view-container"></div>
     </main>
     <footer class="site-footer">
-      <span>Data: City of Casey (VIC) via Open Data API</span>
+      <span id="footer-sources">Data loading…</span>
       <span>Built by <a href="https://benrichardson.dev/">benrichardson.dev</a></span>
     </footer>
   `;
@@ -120,7 +136,7 @@ function renderShell(): void {
   }, 300));
 
   // Filter handlers
-  for (const id of ['filter-category', 'filter-decision', 'filter-suburb']) {
+  for (const id of ['filter-category', 'filter-decision', 'filter-suburb', 'filter-council']) {
     document.getElementById(id)?.addEventListener('change', (e) => {
       const select = e.target as HTMLSelectElement;
       const key = id.replace('filter-', '') as keyof FilterState;
@@ -142,8 +158,6 @@ function renderShell(): void {
 
   // Glossary button
   document.getElementById('glossary-btn')?.addEventListener('click', openGlossaryModal);
-
-  // About button
   document.getElementById('about-btn')?.addEventListener('click', openAboutModal);
 }
 
@@ -153,30 +167,61 @@ function switchView(view: ViewId): void {
   currentView = view;
   localStorage.setItem('au-planning-view', view);
 
-  // Update active tab
   document.querySelectorAll('.view-tab').forEach(tab => {
     tab.classList.toggle('active', (tab as HTMLElement).dataset.view === view);
   });
 
+  // Toggle map-active class for full-bleed map
+  const viewContainer = document.getElementById('view-container');
+  if (viewContainer) viewContainer.classList.toggle('map-active', view === 'map');
+
   renderCurrentView();
+}
+
+function handleCouncilClick(slug: string): void {
+  const council = councilStats.find(c => c.slug === slug);
+  if (!council) return;
+
+  // Compute global medians for comparison
+  const processingVals = councilStats.filter(c => c.medianProcessingDays !== null).map(c => c.medianProcessingDays!);
+  const approvalVals = councilStats.filter(c => c.approvalRate !== null).map(c => c.approvalRate!);
+  const globalMedianProcessing = sortedMedian(processingVals);
+  const globalMedianApproval = sortedMedian(approvalVals);
+
+  openCouncilPanel(council, globalMedianProcessing, globalMedianApproval);
+}
+
+function sortedMedian(arr: number[]): number {
+  if (arr.length === 0) return 0;
+  const s = [...arr].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
 function renderCurrentView(): void {
   const container = document.getElementById('view-container');
   if (!container) return;
 
+  // Toggle map-active class
+  container.classList.toggle('map-active', currentView === 'map');
+
   const filtered = filterApplications(apps, filters);
 
   switch (currentView) {
+    case 'leaderboard':
+      renderLeaderboard(container, councilStats, handleCouncilClick);
+      break;
+    case 'insights':
+      renderInsightsView(container, councilStats, handleCouncilClick);
+      break;
     case 'map':
-      renderMapView(container, filtered);
+      renderMapView(container, councilStats, handleCouncilClick);
       break;
     case 'table':
       renderTable(container, filtered);
       break;
     case 'categories':
       if (aggregates) {
-        // If filters active, recompute aggregates from filtered data
         if (hasActiveFilters()) {
           renderCategories(container, computeAggregatesFromApps(filtered));
         } else {
@@ -214,11 +259,14 @@ function renderCurrentView(): void {
         }
       }
       break;
+    case 'states':
+      renderStatesView(container, councilStats, handleCouncilClick);
+      break;
   }
 }
 
 function hasActiveFilters(): boolean {
-  return !!(filters.search || filters.category || filters.decision || filters.suburb || filters.yearFrom || filters.yearTo);
+  return !!(filters.search || filters.category || filters.decision || filters.suburb || filters.council || filters.yearFrom || filters.yearTo);
 }
 
 function computeAggregatesFromApps(filtered: DevelopmentApplication[]): Aggregates {
@@ -227,6 +275,8 @@ function computeAggregatesFromApps(filtered: DevelopmentApplication[]): Aggregat
   const byMonth: Record<string, number> = {};
   const byStatus: Record<string, number> = {};
   const byDecision: Record<string, number> = {};
+  const byCouncil: Record<string, number> = {};
+  const byState: Record<string, number> = {};
   const flows: Record<string, number> = {};
   const processingTimes: number[] = [];
 
@@ -235,6 +285,8 @@ function computeAggregatesFromApps(filtered: DevelopmentApplication[]): Aggregat
     bySuburb[a.suburb] = (bySuburb[a.suburb] || 0) + 1;
     byStatus[a.status] = (byStatus[a.status] || 0) + 1;
     byDecision[a.decision] = (byDecision[a.decision] || 0) + 1;
+    byCouncil[a.council] = (byCouncil[a.council] || 0) + 1;
+    byState[a.state] = (byState[a.state] || 0) + 1;
     if (a.lodgedDate) {
       const month = a.lodgedDate.slice(0, 7);
       byMonth[month] = (byMonth[month] || 0) + 1;
@@ -248,11 +300,14 @@ function computeAggregatesFromApps(filtered: DevelopmentApplication[]): Aggregat
 
   return {
     totalRecords: filtered.length,
+    councilCount: Object.keys(byCouncil).length,
     byCategory,
     bySuburb,
     byMonth,
     byStatus,
     byDecision,
+    byCouncil,
+    byState,
     flows,
     processingTimes: processingTimes.sort((a, b) => a - b),
   };
@@ -266,11 +321,32 @@ function updateStats(): void {
     ? new Date(meta.lastUpdated).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
     : '—';
 
-  statsEl.textContent = `${formatNumber(aggregates.totalRecords)} applications · Updated ${lastUpdated}`;
+  const councilCount = councilStats.length;
+  statsEl.textContent = `${formatNumber(aggregates.totalRecords)} applications · ${councilCount} council${councilCount !== 1 ? 's' : ''} · Updated ${lastUpdated}`;
+
+  // Update footer
+  const footerEl = document.getElementById('footer-sources');
+  if (footerEl && meta) {
+    const sources = meta.councils.filter(c => c.recordCount > 0).map(c => `${c.name} (${c.state})`).join(', ');
+    footerEl.textContent = `Data: ${sources || 'Loading…'}`;
+  }
 }
 
 function populateFilters(): void {
   if (!aggregates) return;
+
+  // Council filter (only show if multiple councils)
+  const councilSelect = document.getElementById('filter-council') as HTMLSelectElement;
+  if (councilSelect) {
+    if (councilStats.length > 1) {
+      councilSelect.style.display = '';
+      const councilEntries = sortedEntries(aggregates.byCouncil || {});
+      councilSelect.innerHTML = '<option value="">All councils</option>' +
+        councilEntries.map(([name, count]) => `<option value="${name}" ${filters.council === name ? 'selected' : ''}>${name} (${formatNumber(count)})</option>`).join('');
+    } else {
+      councilSelect.style.display = 'none';
+    }
+  }
 
   const catSelect = document.getElementById('filter-category') as HTMLSelectElement;
   if (catSelect) {
@@ -337,7 +413,6 @@ function openAboutModal(): void {
     `<li><strong>${c.name}</strong> (${c.state}) — ${formatNumber(c.recordCount)} records${c.error ? ` <span style="color:var(--status-bad)">Error: ${c.error}</span>` : ''}</li>`
   ).join('');
 
-  // Get category colors for legend
   const colors = allCategoryColors();
   const legend = Object.entries(colors).map(([cat, color]) =>
     `<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 8px 2px 0;">
@@ -349,35 +424,29 @@ function openAboutModal(): void {
   openModal(
     'About Development Applications (AU)',
     `
-      <p>This site provides a unified view of planning and development applications across Australian councils. Currently focused on the City of Casey in Victoria, with more councils coming soon.</p>
+      <p>This site provides a unified view of planning and development applications across Australian councils with actionable insights — leaderboards, anomaly detection, and comparative analysis.</p>
 
       <h3>What is a Development Application?</h3>
-      <p>A development application (DA) — or "planning permit application" in Victoria — is a formal request to a local council for permission to build, demolish, or change how land or buildings are used. Every significant change to the built environment goes through this process.</p>
+      <p>A development application (DA) — or "planning permit application" in Victoria — is a formal request to a local council for permission to build, demolish, or change how land or buildings are used.</p>
 
       <h3>Data Sources</h3>
       <ul>${councilList}</ul>
-      <p>Data is fetched via a GitHub Actions pipeline that runs every 6 hours. The pipeline normalises data from different councils into a consistent format.</p>
+      <p>Data is fetched via a GitHub Actions pipeline that runs every 6 hours. Adding a PlanningAlerts API key extends coverage to 212+ councils across 89% of Australia.</p>
 
-      <h3>How to add more councils</h3>
-      <p>The pipeline is designed to be extended. Any Australian council that publishes their DA data as an open data feed can be added. The site currently supports OpenDataSoft-based council portals (like City of Casey) and PlanningAlerts API (requires an API key).</p>
+      <h3>Insights</h3>
+      <p>The site automatically detects anomalies: councils with processing times &gt;2x the median, unusually high rejection rates, stalled applications, and year-over-year volume spikes. These insights help journalists, researchers, and citizens identify dysfunctional processes.</p>
 
       <h3>Category Legend</h3>
       <div style="margin:8px 0;display:flex;flex-wrap:wrap;">${legend}</div>
 
-      <h3>Limitations</h3>
-      <p>Processing times shown are calendar days, not statutory days. Statutory timelines pause during advertising and information request periods, so the calendar days shown may be longer than the statutory processing time.</p>
-      <p>Category classification is approximate — it uses keyword matching on application descriptions, which varies by council.</p>
-
       <h3>Privacy</h3>
-      <p>This site uses no cookies, no analytics, and no tracking. All data comes from publicly available government open data portals. Filter preferences are saved in your browser's local storage.</p>
+      <p>No cookies, no analytics, no tracking. All data is from publicly available government open data portals.</p>
     `
   );
 }
 
 function openModal(title: string, bodyHtml: string): void {
-  // Remove existing modal
   document.querySelector('.modal-overlay')?.remove();
-
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
@@ -387,19 +456,11 @@ function openModal(title: string, bodyHtml: string): void {
       <div class="modal-body">${bodyHtml}</div>
     </div>
   `;
-
   document.body.appendChild(overlay);
-
-  // Close handlers
   overlay.querySelector('.modal-close')?.addEventListener('click', () => overlay.remove());
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) overlay.remove();
-  });
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
   document.addEventListener('keydown', function handler(e) {
-    if (e.key === 'Escape') {
-      overlay.remove();
-      document.removeEventListener('keydown', handler);
-    }
+    if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', handler); }
   });
 }
 

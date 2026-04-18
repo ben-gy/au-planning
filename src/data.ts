@@ -1,8 +1,10 @@
-import type { DevelopmentApplication, Aggregates, Meta } from './types';
+import type { DevelopmentApplication, Aggregates, Meta, CouncilStats } from './types';
 
 let cachedApplications: DevelopmentApplication[] | null = null;
 let cachedAggregates: Aggregates | null = null;
 let cachedMeta: Meta | null = null;
+let cachedCouncilStats: CouncilStats[] | null = null;
+const cachedCouncilDetail = new Map<string, DevelopmentApplication[]>();
 
 async function fetchJSON<T>(path: string): Promise<T> {
   const res = await fetch(path);
@@ -28,17 +30,31 @@ export async function loadMeta(): Promise<Meta> {
   return cachedMeta;
 }
 
+export async function loadCouncilStats(): Promise<CouncilStats[]> {
+  if (cachedCouncilStats) return cachedCouncilStats;
+  cachedCouncilStats = await fetchJSON<CouncilStats[]>('/data/council-stats.json');
+  return cachedCouncilStats;
+}
+
+export async function loadCouncilDetail(slug: string): Promise<DevelopmentApplication[]> {
+  if (cachedCouncilDetail.has(slug)) return cachedCouncilDetail.get(slug)!;
+  const data = await fetchJSON<DevelopmentApplication[]>(`/data/councils/${slug}.json`);
+  cachedCouncilDetail.set(slug, data);
+  return data;
+}
+
 export interface FilterState {
   search: string;
   category: string;
   decision: string;
   suburb: string;
+  council: string;
   yearFrom: string;
   yearTo: string;
 }
 
 export function defaultFilters(): FilterState {
-  return { search: '', category: '', decision: '', suburb: '', yearFrom: '', yearTo: '' };
+  return { search: '', category: '', decision: '', suburb: '', council: '', yearFrom: '', yearTo: '' };
 }
 
 export function filterApplications(
@@ -58,6 +74,7 @@ export function filterApplications(
     if (f.category && a.category !== f.category) return false;
     if (f.decision && a.decision !== f.decision) return false;
     if (f.suburb && a.suburb !== f.suburb) return false;
+    if (f.council && a.council !== f.council) return false;
     if (f.yearFrom && a.lodgedDate < f.yearFrom) return false;
     if (f.yearTo && a.lodgedDate > f.yearTo + '-12-31') return false;
     return true;

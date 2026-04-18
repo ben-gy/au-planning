@@ -20,6 +20,8 @@ function mockApp(overrides: Partial<DevelopmentApplication> = {}): DevelopmentAp
     lodgedDate: '2026-01-15',
     decisionDate: '2026-03-10',
     processingDays: 54,
+    lat: null,
+    lng: null,
     ...overrides,
   };
 }
@@ -101,5 +103,16 @@ describe('filterApplications', () => {
   it('handles empty app array', () => {
     const result = filterApplications([], defaultFilters());
     expect(result.length).toBe(0);
+  });
+
+  it('filters by council', () => {
+    const mixedApps = [
+      mockApp({ id: '1', council: 'City of Casey' }),
+      mockApp({ id: '2', council: 'City of Melbourne' }),
+      mockApp({ id: '3', council: 'City of Casey' }),
+    ];
+    const result = filterApplications(mixedApps, { ...defaultFilters(), council: 'City of Melbourne' });
+    expect(result.length).toBe(1);
+    expect(result[0].council).toBe('City of Melbourne');
   });
 });
