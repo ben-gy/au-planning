@@ -440,7 +440,7 @@ function openAboutModal(): void {
       <div style="margin:8px 0;display:flex;flex-wrap:wrap;">${legend}</div>
 
       <h3>Privacy</h3>
-      <p>No cookies, no analytics, no tracking. All data is from publicly available government open data portals.</p>
+      <p>No cookies, no fingerprinting, no cross-site tracking. The only analytics is Cloudflare Web Analytics — anonymous, cookie-less page-view counts; no personal data. All data is from publicly available government open data portals.</p>
     `
   );
 }
