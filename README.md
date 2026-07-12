@@ -23,7 +23,7 @@ Currently focused on the **City of Casey** in Victoria (23,000+ applications), w
 
 | Source | What it provides | Update frequency |
 |--------|-------------------|-----------------|
-| City of Casey (VIC) | 23,000+ planning permit applications with type, status, decision, suburb, dates | Continuous (pipeline runs every 6 hours) |
+| City of Casey (VIC) | 23,000+ planning permit applications with type, status, decision, suburb, dates | Continuous (pipeline batches monthly) |
 | PlanningAlerts API | DAs from 212 authorities covering 89% of Australia | Daily (requires API key) |
 
 ## Features
@@ -68,7 +68,7 @@ npm run preview
 
 ## How it works
 
-A GitHub Actions data pipeline runs every 6 hours:
+A GitHub Actions data pipeline runs monthly:
 
 1. **Collect** — `pipeline/collect.mjs` fetches development application records from council open data APIs (currently City of Casey via their OpenDataSoft API)
 2. **Normalise** — Raw data is normalised into a consistent schema: category classification via keyword matching, status normalisation, processing time calculation

@@ -2,7 +2,8 @@ name: Data Pipeline
 
 on:
   schedule:
-    - cron: '30 4 11 1,4,7,10 *'
+    # Cadence: monthly (DA registers update continuously; monthly is the policy cap)
+    - cron: '30 4 11 * *'
   workflow_dispatch:
   push:
     branches: [main]
