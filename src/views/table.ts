@@ -73,9 +73,9 @@ export function renderTable(container: HTMLElement, apps: DevelopmentApplication
         <tbody>
           ${displayApps.map(a => `
             <tr>
-              <td class="col-date" title="${formatDate(a.lodgedDate)}">${formatRelativeDate(a.lodgedDate)}</td>
+              <td class="col-date" data-tip="Lodged ${formatDate(a.lodgedDate)}" aria-label="Lodged ${formatDate(a.lodgedDate)}">${formatRelativeDate(a.lodgedDate)}</td>
               <td class="col-appnum">${a.applicationNumber}</td>
-              <td class="col-desc" title="${a.description.replace(/"/g, '&quot;')}">${truncate(a.description, 60)}</td>
+              <td class="col-desc" data-tip="${a.description.replace(/"/g, '&quot;')}" aria-label="${a.description.replace(/"/g, '&quot;')}">${truncate(a.description, 60)}</td>
               <td><span class="pill pill-default">${a.category}</span></td>
               <td>${a.suburb}</td>
               <td><span class="${pillClass(a.decision)}">${a.decision}</span></td>

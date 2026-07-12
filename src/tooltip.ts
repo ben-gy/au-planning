@@ -25,6 +25,41 @@ export function hideTooltip(): void {
   if (tooltipEl) tooltipEl.classList.remove('visible');
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Attribute-driven hover tooltips: any element with [data-tip] shows its exact
+// value in the shared styled tooltip on hover. Reuses showTooltip/hideTooltip.
+export function initDataTips(): void {
+  let activeTip = '';
+  document.addEventListener('mouseover', (e) => {
+    const target = (e.target as Element).closest('[data-tip]') as HTMLElement | null;
+    if (!target) return;
+    const text = target.getAttribute('data-tip') ?? '';
+    if (!text) return;
+    activeTip = text;
+    showTooltip(escapeHtml(text), (e as MouseEvent).clientX, (e as MouseEvent).clientY);
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!activeTip) return;
+    const target = (e.target as Element).closest('[data-tip]') as HTMLElement | null;
+    if (!target || target.getAttribute('data-tip') !== activeTip) {
+      activeTip = '';
+      hideTooltip();
+      return;
+    }
+    showTooltip(escapeHtml(activeTip), (e as MouseEvent).clientX, (e as MouseEvent).clientY);
+  });
+  document.addEventListener('mouseout', (e) => {
+    const target = (e.target as Element).closest('[data-tip]');
+    if (target) {
+      activeTip = '';
+      hideTooltip();
+    }
+  });
+}
+
 // Glossary tooltip (separate element)
 let glossaryEl: HTMLDivElement | null = null;
 

@@ -55,6 +55,12 @@ export function renderMapView(
       opacity: 0.8,
     }).addTo(map);
 
+    // Hover tooltip: identify the council + exact headline stats without a click
+    circle.bindTooltip(
+      `<strong>${c.name}</strong><br>${formatNumber(c.recordCount)} applications${c.approvalRate !== null ? ` · ${c.approvalRate}% approved` : ''}`,
+      { direction: 'top', offset: [0, -radius], opacity: 1 }
+    );
+
     // Top categories for popup
     const topCats = Object.entries(c.byCategory)
       .sort((a, b) => b[1] - a[1])

@@ -3,7 +3,7 @@ import { loadApplications, loadAggregates, loadMeta, loadCouncilStats, filterApp
 import type { DevelopmentApplication, Aggregates, Meta, CouncilStats, ViewId } from './types';
 import { formatNumber, debounce, sortedEntries, allCategoryColors } from './utils';
 import { getAllTerms } from './glossary';
-import { initGlossaryLinks } from './tooltip';
+import { initGlossaryLinks, initDataTips } from './tooltip';
 import { renderTable } from './views/table';
 import { renderCategories } from './views/categories';
 import { renderTimelineView } from './views/timeline';
@@ -32,6 +32,7 @@ async function init(): Promise<void> {
   injectStyles();
   renderShell();
   initGlossaryLinks();
+  initDataTips();
 
   const viewContainer = document.getElementById('view-container');
   if (viewContainer) viewContainer.innerHTML = '<div class="loading"><span class="loading-pulse">Loading development applications…</span></div>';
