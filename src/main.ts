@@ -116,7 +116,7 @@ function renderShell(): void {
     </main>
     <footer class="site-footer">
       <span id="footer-sources">Data loading…</span>
-      <span>Built by <a href="https://benrichardson.dev/">benrichardson.dev</a> · <a href="https://sites.benrichardson.dev" target="_blank" rel="noopener">more tools &amp; sites</a></span>
+      <span>Built by <a href="https://benrichardson.dev/">benrichardson.dev</a> · <a href="https://hub.benrichardson.dev" target="_blank" rel="noopener">more tools &amp; sites</a></span>
     </footer>
   `;
 
