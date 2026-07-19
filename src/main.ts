@@ -1,3 +1,8 @@
+// feedback:begin (managed by hub/scripts/feedback/backfill.mjs)
+import { mountFeedback } from './feedback';
+mountFeedback();
+// feedback:end
+
 import { injectStyles } from './styles';
 import { loadApplications, loadAggregates, loadMeta, loadCouncilStats, filterApplications, defaultFilters, type FilterState } from './data';
 import type { DevelopmentApplication, Aggregates, Meta, CouncilStats, ViewId } from './types';
